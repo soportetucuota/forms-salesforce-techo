@@ -208,7 +208,7 @@ onMounted(load);
         :required="false"
         :disabled="isSubmitting || !canSavePaymentMethod"
         title="Actualiza tu medio de pago"
-        description="Si cambiaste de tarjeta o preferís adherir un CBU, completá los datos abajo. Si tu tarjeta es la misma y solo modificaste el monto, podés saltear este paso."
+        description="Si cambiaste de tarjeta o preferís adherir un CBU, completá los datos abajo."
       />
 
       <p v-if="errorMessage" class="text-sm text-red-600" role="alert">
