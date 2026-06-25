@@ -18,7 +18,6 @@ import { COUNTRIES, PROVINCES } from "~/data/argentina";
 import {
   isAdult,
   validateEmail,
-  validatePhoneNumber,
   validateSimpleBirthDate,
 } from "~/composables/validators";
 import { formatBirthDateDisplay } from "~/composables/formatters";
@@ -71,9 +70,39 @@ const errors = reactive<Record<keyof PersonalData, string | null>>({
 
 const firstInvalidRef = ref<HTMLElement | null>(null);
 
+const PHONE_MIN_DIGITS = 10;
+const PHONE_MAX_DIGITS = 15;
+
+/**
+ * Live phone validation message. Returns `null` when the number is valid (or
+ * still empty, so we don't nag before the user types). Mirrors the submit-time
+ * rule (`validatePhoneNumber`) but adds an upper bound and digit-count hints so
+ * the user sees when digits are missing or in excess while they type.
+ */
+function phoneError(value: string): string | null {
+  if (!value) return null;
+  const cleaned = value.replace(/[\s()-]/g, "");
+  if (!/^\d+$/.test(cleaned)) {
+    return "El celular solo puede tener números.";
+  }
+  if (cleaned.length < PHONE_MIN_DIGITS) {
+    const missing = PHONE_MIN_DIGITS - cleaned.length;
+    return `Faltan ${missing} dígito${missing === 1 ? "" : "s"} (mínimo ${PHONE_MIN_DIGITS}).`;
+  }
+  if (cleaned.length > PHONE_MAX_DIGITS) {
+    const extra = cleaned.length - PHONE_MAX_DIGITS;
+    return `Sobran ${extra} dígito${extra === 1 ? "" : "s"} (máximo ${PHONE_MAX_DIGITS}).`;
+  }
+  return null;
+}
+
 function update<K extends keyof PersonalData>(key: K, value: PersonalData[K]) {
   emit("update:modelValue", { ...props.modelValue, [key]: value });
-  if (errors[key]) errors[key] = null;
+  if (key === "phone") {
+    errors.phone = phoneError(value as string);
+  } else if (errors[key]) {
+    errors[key] = null;
+  }
 }
 
 async function validate() {
@@ -101,8 +130,10 @@ async function validate() {
   if (!v.email) out.email = "Ingresá tu email.";
   else if (!validateEmail(v.email)) out.email = "Ingresá un email válido.";
   if (!v.phone) out.phone = "Ingresá tu celular (con código de área).";
-  else if (!validatePhoneNumber(v.phone))
-    out.phone = "El celular tiene que tener al menos 10 dígitos.";
+  else {
+    const phoneMsg = phoneError(v.phone);
+    if (phoneMsg) out.phone = phoneMsg;
+  }
   if (props.includeCountry && !v.country) out.country = "Elegí tu país.";
   if (props.includeProvince && !v.province)
     out.province = "Elegí tu provincia.";
