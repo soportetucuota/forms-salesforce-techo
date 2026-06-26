@@ -2,12 +2,15 @@ import { Connection } from "jsforce";
 import type { DebiPaymentToken } from "~/composables/useDebiClient";
 
 /**
- * Consumer Keys of Debi's `Debi_Forms_Onboarding` Connected Apps. Production
- * and sandbox orgs are served by different Connected Apps with different
- * Consumer Keys, so the runtime selects one based on `SF_LOGIN_URL`. Both
- * apps are public PKCE clients — there's no Consumer Secret, so these values
- * are safe to commit. Refresh tokens minted by the central onboarding helper
- * are bound to the matching client_id.
+ * Consumer Keys of the Salesforce Connected Apps. Production and sandbox orgs
+ * are served by different Connected Apps with different Consumer Keys, so the
+ * runtime selects one based on `SF_LOGIN_URL`. The Consumer Key is not a
+ * secret, so these values are safe to commit. Refresh tokens minted by the
+ * central onboarding helper are bound to the matching client_id.
+ *
+ * The refresh-token flow is configured to NOT require a Consumer Secret, so
+ * the runtime acts as a public client and never needs a secret distributed to
+ * the customer deploy.
  */
 const SF_PRODUCTION_CLIENT_ID =
   "3MVG9riCAn8HHkYWlE8jFLOna32YIJWbJVjAocus39R7jqQUZwHtITeYr2353Z2i.wp9AsDy5RiZ.LsDqWVyL";
@@ -17,9 +20,13 @@ const SF_SANDBOX_CLIENT_ID =
 
 const SANDBOX_LOGIN_URL = "https://test.salesforce.com";
 
+function isSandboxLoginUrl(loginUrl: string): boolean {
+  return loginUrl.trim().toLowerCase().startsWith(SANDBOX_LOGIN_URL);
+}
+
 /** Picks the Connected App Consumer Key matching the org's login host. */
 function clientIdForLoginUrl(loginUrl: string): string {
-  return loginUrl.trim().toLowerCase().startsWith(SANDBOX_LOGIN_URL)
+  return isSandboxLoginUrl(loginUrl)
     ? SF_SANDBOX_CLIENT_ID
     : SF_PRODUCTION_CLIENT_ID;
 }
@@ -160,15 +167,44 @@ function sameSalesforceId(a: string, b: string): boolean {
   return a.slice(0, 15).toLowerCase() === b.slice(0, 15).toLowerCase();
 }
 
+/**
+ * Maps a Salesforce OAuth error (from the token endpoint) to a clear,
+ * actionable message. Salesforce returns terse codes like `invalid_client`
+ * or `invalid_grant`; without this mapping the raw JSON leaked straight to
+ * the form, which was confusing for both donors and the person deploying.
+ */
+function friendlySalesforceAuthMessage(
+  code: string,
+  description: string,
+): string {
+  switch (code) {
+    case "invalid_client":
+    case "invalid_client_id":
+      return "No pudimos conectar con Salesforce: las credenciales de la aplicación son inválidas. Revisá que el SF_CLIENT_ID coincida con el Consumer Key de la Connected App y que corresponda al entorno correcto (producción vs. sandbox).";
+    case "invalid_grant":
+      return "No pudimos conectar con Salesforce: la conexión expiró o fue revocada. Hay que volver a generar el SF_REFRESH_TOKEN desde el asistente de conexión y actualizarlo en las variables de entorno.";
+    case "inactive_user":
+      return "No pudimos conectar con Salesforce: el usuario asociado a la conexión está inactivo. Activalo en Salesforce o generá el token con otro usuario.";
+    case "inactive_org":
+      return "No pudimos conectar con Salesforce: la organización de Salesforce está inactiva o suspendida.";
+    default: {
+      const detail = description || code || "error desconocido";
+      return `No pudimos conectar con Salesforce (${detail}). Revisá la configuración de la conexión.`;
+    }
+  }
+}
+
 async function openConnection(): Promise<Connection> {
   const config = useRuntimeConfig();
   const loginUrl = requireString(config.sfLoginUrl, "SF_LOGIN_URL");
   const instanceUrl = requireString(config.sfInstanceUrl, "SF_INSTANCE_URL");
   const refreshToken = requireString(config.sfRefreshToken, "SF_REFRESH_TOKEN");
 
-  // Refresh tokens are minted by Debi's bundled PKCE-only Connected App and
-  // are bound to its Consumer Key. The Connected App is public, so no
-  // client_secret is ever needed.
+  // The Connected Apps allow the refresh-token flow without a client_secret
+  // ("Require Secret for Refresh Token Flow" is disabled), so the runtime
+  // refreshes as a public client with just the Consumer Key + refresh token.
+  // The Consumer Secret stays server-side at Debi's onboarding helper and is
+  // never distributed to customer deploys.
   const refreshParams: Record<string, string> = {
     grant_type: "refresh_token",
     client_id: clientIdForLoginUrl(loginUrl),
@@ -183,15 +219,38 @@ async function openConnection(): Promise<Connection> {
   });
 
   if (!tokenResponse.ok) {
-    throw new Error(
-      `Falló la renovación OAuth de Salesforce: ${await tokenResponse.text()}`,
+    const raw = await tokenResponse.text();
+    let oauthError = "";
+    let oauthDescription = "";
+    try {
+      const parsed = JSON.parse(raw) as {
+        error?: string;
+        error_description?: string;
+      };
+      oauthError = parsed.error ?? "";
+      oauthDescription = parsed.error_description ?? "";
+    } catch {
+      oauthDescription = raw;
+    }
+    // Keep the raw Salesforce payload in the server logs (Vercel) for
+    // debugging; the user only sees the friendly message below.
+    console.error("[salesforce] OAuth refresh failed", {
+      status: tokenResponse.status,
+      loginUrl,
+      error: oauthError,
+      description: oauthDescription,
+    });
+    throw new FlowRequestError(
+      friendlySalesforceAuthMessage(oauthError, oauthDescription),
+      502,
     );
   }
 
   const tokenJson = (await tokenResponse.json()) as { access_token?: string };
   if (!tokenJson.access_token) {
-    throw new Error(
-      "La renovación OAuth de Salesforce no devolvió access_token",
+    throw new FlowRequestError(
+      "No pudimos conectar con Salesforce: la respuesta de autenticación no incluyó un token de acceso. Reintentá en unos minutos y, si persiste, revisá la configuración de la Connected App.",
+      502,
     );
   }
 

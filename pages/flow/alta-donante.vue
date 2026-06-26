@@ -5,7 +5,7 @@
  * URL: /flow/alta-donante
  *
  * Wizard de 2 pasos para alta de donantes:
- *   Step 1 — datos personales (nombre, apellido, fecha nac., email, tel, país, provincia)
+ *   Step 1 — datos personales (nombre, apellido, fecha nac., email, tel)
  *   Step 2 — monto + frecuencia, método de pago, DNI, términos + "¿Ya sos donante?"
  *
  * El patrón anti-abandono se preserva: `onStepAdvance` hace POST de los
@@ -203,8 +203,8 @@ async function onSubmit() {
           :step-index="1"
           title="Empezá con tus datos"
           description="Vamos a usarlos solo para registrar tu donación."
-          :include-country="true"
-          :include-province="true"
+          :include-country="false"
+          :include-province="false"
           :disabled="isSubmitting"
         />
       </template>

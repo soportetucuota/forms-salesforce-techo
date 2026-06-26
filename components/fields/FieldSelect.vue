@@ -4,7 +4,8 @@
  *
  * Options may have `null` values (used as a "Otro" / placeholder marker in
  * the legacy debi-forms config). Empty string is reserved for "not chosen
- * yet" — the placeholder option uses it.
+ * yet" — the placeholder option uses it and must stay enabled so browsers
+ * display it instead of auto-selecting the first real option.
  */
 import type { Option } from "~/data/argentina";
 
@@ -73,7 +74,7 @@ const hasPlaceholder = computed(
       class="w-full rounded-lg border border-border bg-background px-3 py-2 text-base text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-60 sm:text-sm"
       @change="onChange"
     >
-      <option v-if="hasPlaceholder" value="" disabled>{{ placeholder }}</option>
+      <option v-if="hasPlaceholder" value="">{{ placeholder }}</option>
       <option
         v-for="(opt, i) in options"
         :key="i"

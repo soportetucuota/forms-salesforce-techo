@@ -404,4 +404,53 @@ repo es 100% tuyo y Debi no le pushea commits a tu fork.
 Puede que Debi publique nuevas plantillas — típicamente 2–3 archivos
 (`pages/flow/<nombre>.vue` + `server/api/flow/<nombre>.post.ts`) que
 podés copiar al repo, ajustar lo que quieras, hacer commit, y Vercel
-auto-deploya.
+auto-deploya. Pero es un trabajo manual que puede no ser tan sencillo, lo explicamos a continuación.
+
+### Traer los commits nuevos del fork principal
+
+Si querés sincronizar tu fork con las mejoras del repo original
+(`debipro/forms-salesforce`), agregalo una sola vez como remoto
+`upstream` y después traé los cambios cuando quieras.
+
+**1. Configurar el remoto `upstream` (solo la primera vez):**
+
+```bash
+# Add the original repo as the "upstream" remote
+git remote add upstream https://github.com/debipro/forms-salesforce.git
+
+# Verify both remotes ("origin" = your fork, "upstream" = original repo)
+git remote -v
+```
+
+**2. Traer los commits nuevos (cada vez que quieras actualizar):**
+
+```bash
+# Download the latest commits from the original repo
+git fetch upstream
+
+# See which new commits exist upstream but not in your branch
+git log --oneline main..upstream/main
+
+# Bring those commits into your local main
+git checkout main
+git merge upstream/main
+```
+
+**3. Subir los cambios a tu fork:**
+
+```bash
+git push origin main
+```
+
+> Si preferís revisar los cambios antes de mezclarlos en `main`, creá
+> una rama nueva y abrí un Pull Request en vez de mergear directo:
+>
+> ```bash
+> git fetch upstream
+> git checkout -b sync-upstream upstream/main
+> git push -u origin sync-upstream
+> # luego abrí el PR desde GitHub (o con `gh pr create`)
+> ```
+>
+> Si aparecen conflictos al mergear, Git te marca los archivos en
+> conflicto; resolvelos, hacé `git add <archivo>` y `git commit`.
