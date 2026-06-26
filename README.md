@@ -404,7 +404,7 @@ repo es 100% tuyo y Debi no le pushea commits a tu fork.
 Puede que Debi publique nuevas plantillas — típicamente 2–3 archivos
 (`pages/flow/<nombre>.vue` + `server/api/flow/<nombre>.post.ts`) que
 podés copiar al repo, ajustar lo que quieras, hacer commit, y Vercel
-auto-deploya.
+auto-deploya. Pero es un trabajo manual que puede no ser tan sencillo, lo explicamos a continuación.
 
 ### Traer los commits nuevos del fork principal
 
