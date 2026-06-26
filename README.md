@@ -15,7 +15,7 @@ funcionando contra Salesforce de fábrica:
 
 ---
 
-## 1) Deployar en Vercel (10 minutos)
+## 1) Deployar en Vercel (10 minutos).
 
 Estos pasos asumen que no tenés ni GitHub ni Vercel todavía. Si ya
 tenés cuenta en ambos, saltá al paso 4.
